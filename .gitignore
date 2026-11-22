@@ -1,0 +1,13 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# models and generated data
+Qwen3.5-0.8B/
+chroma_db/
+chroma_test/
+
+# PDFs
+data/
