@@ -5,7 +5,11 @@ from transformers.utils import logging
 
 # Model folder inside the project: llm_project/models/Qwen3.5-0.8B
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODEL_PATH = os.path.join(PROJECT_DIR, "models", "Qwen3.5-0.8B")
+LOCAL_MODEL_PATH = os.path.join(PROJECT_DIR, "models", "Qwen3.5-0.8B")
+HUB_MODEL_ID = "Qwen/Qwen3.5-0.8B"
+
+# Use the local copy if it exists, otherwise download from Hugging Face
+MODEL_PATH = LOCAL_MODEL_PATH if os.path.isdir(LOCAL_MODEL_PATH) else HUB_MODEL_ID
 
 # Pick the fastest device on this computer
 if torch.cuda.is_available():            # NVIDIA GPU (Windows / Linux)
@@ -17,6 +21,15 @@ elif torch.backends.mps.is_available():  # Apple Silicon Mac
 else:                                    # any CPU
     DEVICE = "cpu"
     DTYPE = torch.float32
+
+
+def load_llm(model_path=MODEL_PATH):
+    """Load the model once."""
+    processor = AutoProcessor.from_pretrained(model_path)
+    model = AutoModelForMultimodalLM.from_pretrained(
+        model_path, torch_dtype=DTYPE
+    ).to(DEVICE)
+    return processor, model
 
 
 def generate_reply(llm, messages, max_new_tokens=512, temperature=0):
