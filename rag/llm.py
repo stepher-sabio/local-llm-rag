@@ -3,19 +3,20 @@ import torch
 from transformers import AutoProcessor, AutoModelForMultimodalLM
 from transformers.utils import logging
 
-logging.set_verbosity_error()  # hide warnings
+# Model folder inside the project: llm_project/models/Qwen3.5-0.8B
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODEL_PATH = os.path.join(PROJECT_DIR, "models", "Qwen3.5-0.8B")
 
-MODEL_PATH = os.path.expanduser("~/Desktop/llm_project/Qwen3.5-0.8B")
-DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
-
-
-def load_llm(model_path=MODEL_PATH):
-    """Load the model once."""
-    processor = AutoProcessor.from_pretrained(model_path)
-    model = AutoModelForMultimodalLM.from_pretrained(
-        model_path, torch_dtype=torch.bfloat16
-    ).to(DEVICE)
-    return processor, model
+# Pick the fastest device on this computer
+if torch.cuda.is_available():            # NVIDIA GPU (Windows / Linux)
+    DEVICE = "cuda"
+    DTYPE = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+elif torch.backends.mps.is_available():  # Apple Silicon Mac
+    DEVICE = "mps"
+    DTYPE = torch.bfloat16
+else:                                    # any CPU
+    DEVICE = "cpu"
+    DTYPE = torch.float32
 
 
 def generate_reply(llm, messages, max_new_tokens=512, temperature=0):
