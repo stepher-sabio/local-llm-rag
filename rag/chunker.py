@@ -17,7 +17,7 @@ def chunk_pages(pages, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
 
     return chunks
 
-
+# test the chunker
 if __name__ == "__main__":
     from pdf_loader import load_pdf
 
