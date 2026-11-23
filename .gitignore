@@ -11,3 +11,6 @@ chroma_test/
 
 # PDFs
 data/
+# uploaded PDFs (keep the folder, ignore its contents)
+PDFs/*
+!PDFs/.gitkeep
