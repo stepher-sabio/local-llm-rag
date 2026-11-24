@@ -1,11 +1,11 @@
 import os
 import re
 
-from pdf_loader import load_pdf
-from chunker import chunk_pages
-from embedder import load_embedder, embed
-from vectordb import create_collection, add_chunks, search
-from llm import load_llm, generate_reply
+from rag.pdf_loader import load_pdf
+from rag.chunker import chunk_pages
+from rag.embedder import load_embedder, embed
+from rag.vectordb import create_collection, add_chunks, search
+from rag.llm import load_llm, generate_reply
 
 TOP_K = 5  # number of chunks given to the LLM
 
