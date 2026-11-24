@@ -8,14 +8,20 @@ from rag.llm import *
 
 PDF_DIR = Path(__file__).resolve().parent / "PDFs"
 
+MODELS = {
+    "Qwen3.5 0.8B (fast)": "Qwen/Qwen3.5-0.8B",
+    "Qwen3.5 2B": "Qwen/Qwen3.5-2B",
+    "Qwen3.5 4B": "Qwen/Qwen3.5-4B",
+}
+
 
 # Models
 # Streamlit reruns your Python script whenever the user interacts with the application.
 # So @st.cache_resource tells Streamlit to load a resource once and reuse it.
-@st.cache_resource
-def load_models():
+@st.cache_resource(max_entries=1)
+def load_models(model_id):
     embedder = load_embedder()
-    llm = load_llm()
+    llm = load_llm(model_id)
     return embedder, llm
 
 
@@ -35,7 +41,7 @@ def initialize_session():
 def index_pdfs(files):
     PDF_DIR.mkdir(exist_ok=True)
 
-    embedder, _ = load_models()
+    embedder, _ = load_models(st.session_state.model_id)
     indexed_files = []
 
     for file in files:
@@ -54,7 +60,7 @@ def index_pdfs(files):
 
 # Chat handling
 def get_answer(question):
-    embedder, llm = load_models()
+    embedder, llm = load_models(st.session_state.model_id)
 
     answers = []
     multiple_pdfs = len(st.session_state.collections) > 1
@@ -115,6 +121,9 @@ def main():
     )
 
     initialize_session()
+
+    label = st.sidebar.selectbox("Model", list(MODELS))
+    st.session_state.model_id = MODELS[label]
 
     st.title("Chat with your PDFs")
 

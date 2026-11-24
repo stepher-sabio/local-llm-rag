@@ -3,13 +3,9 @@ import torch
 from transformers import AutoProcessor, AutoModelForMultimodalLM
 from transformers.utils import logging
 
-# Model folder inside the project: llm_project/models/Qwen3.5-0.8B
+# Local model folders live in: <project>/models/<model name>
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LOCAL_MODEL_PATH = os.path.join(PROJECT_DIR, "models", "Qwen3.5-0.8B")
 HUB_MODEL_ID = "Qwen/Qwen3.5-0.8B"
-
-# Use the local copy if it exists, otherwise download from Hugging Face
-MODEL_PATH = LOCAL_MODEL_PATH if os.path.isdir(LOCAL_MODEL_PATH) else HUB_MODEL_ID
 
 # Pick the fastest device on this computer
 if torch.cuda.is_available():            # NVIDIA GPU (Windows / Linux)
@@ -23,8 +19,17 @@ else:                                    # any CPU
     DTYPE = torch.float32
 
 
-def load_llm(model_path=MODEL_PATH):
+def load_llm(model_id=HUB_MODEL_ID):
     """Load the model once."""
+    # Use the local copy if it exists, otherwise download from Hugging Face
+    model_name = model_id.split("/")[-1]
+    local_path = os.path.join(PROJECT_DIR, "models", model_name)
+
+    if os.path.isdir(local_path):
+        model_path = local_path
+    else:
+        model_path = model_id
+
     processor = AutoProcessor.from_pretrained(model_path)
     model = AutoModelForMultimodalLM.from_pretrained(
         model_path, torch_dtype=DTYPE
@@ -33,7 +38,8 @@ def load_llm(model_path=MODEL_PATH):
 
 
 def generate_reply(llm, messages, max_new_tokens=512, temperature=0):
-    """Get the model's answer.
+    """
+    Get the model's answer.
 
     messages: [{"role": "user", "content": "Hi"}, ...]
     """
