@@ -13,6 +13,7 @@ MODELS = {
     "Qwen3.5 0.8B (fast)": "Qwen/Qwen3.5-0.8B",
     "Qwen3.5 2B": "Qwen/Qwen3.5-2B",
     "Qwen3.5 4B": "Qwen/Qwen3.5-4B",
+    "Gemma 4 E2B": "google/gemma-4-E2B-it",
 }
 
 
