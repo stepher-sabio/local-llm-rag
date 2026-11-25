@@ -14,12 +14,12 @@ def create_collection(name):
 
 
 def add_chunks(collection, chunks, vectors):
-    """Store the chunks, their vectors and page numbers."""
+    """Store the chunks, their vectors, PDF name and page numbers."""
     collection.add(
         ids=[f"chunk_{i}" for i in range(len(chunks))],
         embeddings=vectors,
         documents=[c["text"] for c in chunks],
-        metadatas=[{"page": c["page"]} for c in chunks],
+        metadatas=[{"page": c["page"], "source": c["source"]} for c in chunks],
     )
 
 
@@ -31,16 +31,19 @@ def search(collection, question_vector, k=5):
     for text, meta, dist in zip(result["documents"][0],
                                 result["metadatas"][0],
                                 result["distances"][0]):
-        found.append({"page": meta["page"], "text": text, "distance": dist})
+        found.append({"source": meta["source"], "page": meta["page"],
+                      "text": text, "distance": dist})
     return found
 
 
 if __name__ == "__main__":
-    from pdf_loader import load_pdf
-    from chunker import chunk_pages
-    from embedder import load_embedder, embed
+    from rag.pdf_loader import load_pdf
+    from rag.chunker import chunk_pages
+    from rag.embedder import load_embedder, embed
 
     chunks = chunk_pages(load_pdf("data/ESP32 Datasheet.pdf"))
+    for c in chunks:
+        c["source"] = "ESP32 Datasheet.pdf"
     model = load_embedder()
 
     collection = create_collection("esp32_datasheet")
@@ -50,5 +53,5 @@ if __name__ == "__main__":
     question = "Which GPIO pins are input only?"
     q_vector = embed(model, [question])[0]
     for hit in search(collection, q_vector):
-        print(f"page {hit['page']}  distance {hit['distance']:.3f}")
+        print(f"{hit['source']}, page {hit['page']}  distance {hit['distance']:.3f}")
         print("  ", hit["text"][:120].replace("\n", " "))

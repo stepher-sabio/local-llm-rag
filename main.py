@@ -66,15 +66,16 @@ def get_answer(question):
     multiple_pdfs = len(st.session_state.collections) > 1
 
     for name, collection in st.session_state.collections.items():
-        answer, pages, _ = ask(question, collection, embedder, llm)
+        answer, citation, source = ask(question, collection, embedder, llm)
 
         if multiple_pdfs:
             answers.append(f"**{name}**\n\n{answer}")
         else:
             answers.append(answer)
 
-        if pages:
-            answers.append(f"_Pages: {', '.join(map(str, pages))}_")
+        # One citation: the PDF and page the answer came from
+        if citation:
+            answers.append(f"_Source: {citation}_")
 
     return "\n\n".join(answers)
 
