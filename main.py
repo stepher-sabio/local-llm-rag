@@ -1,5 +1,6 @@
 from pathlib import Path
 import streamlit as st
+import os 
 
 from rag.pipeline import *
 from rag.embedder import *
@@ -86,6 +87,14 @@ def process_message(prompt):
     if prompt.files:
         with st.spinner("Reading your PDFs..."):
             files = index_pdfs(prompt.files)
+
+            for file in prompt.files:
+                path = PDF_DIR / Path(file.name).name
+                try:
+                    os.remove(path)
+                    print(f"File '{path}' deleted successfully.")
+                except Exception as e:
+                    print(f"File '{path}' wasn't deleted: {e}")
 
         parts.append(f"Added {len(files)} PDF(s): {', '.join(files)}")
 
