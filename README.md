@@ -9,7 +9,7 @@ The project uses **RAG** (Retrieval-Augmented Generation). It splits a PDF into 
 ## Features
 
 - **Streamlit chat UI**: attach one or more PDFs and ask questions in the same chat.
-- **Fully local**: Local language model and a BGE embedding model run on your machine.
+- **Fully local**: Local language model and a all-MiniLM embedding model run on your machine.
 - **Answers grounded in the document**: the model is told to use only the retrieved excerpts. If the answer isn't there, it replies *"I don't know based on this document."*
 - **Page citations**: every answer lists the pages its excerpts came from.
 - **Multiple PDFs**: each PDF gets its own answer, labeled with the file name.
@@ -33,7 +33,7 @@ Question ──► embedder ──► search top-5 chunks ◄──────�
 |------|------|--------------|
 | 1. Load | [rag/pdf_loader.py](rag/pdf_loader.py) | Reads the text of each page with PyMuPDF and skips empty pages. Rejects files that aren't PDFs and scanned PDFs that have no text. |
 | 2. Chunk | [rag/chunker.py](rag/chunker.py) | Splits each page into chunks of up to 800 characters, with 150 characters of overlap, using LangChain's `RecursiveCharacterTextSplitter`. Every chunk keeps its page number. |
-| 3. Embed | [rag/embedder.py](rag/embedder.py) | Turns each chunk into a vector with [`BAAI/bge-small-en-v1.5`](https://huggingface.co/BAAI/bge-small-en-v1.5). |
+| 3. Embed | [rag/embedder.py](rag/embedder.py) | Turns each chunk into a vector with [`sentence-transformers/all-MiniLM-L12-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L12-v2). |
 | 4. Store | [rag/vectordb.py](rag/vectordb.py) | Saves the chunks and their vectors in a persistent [Chroma](https://www.trychroma.com/) database (`chroma_db/`) using cosine distance. Each PDF gets its own collection. |
 | 5. Retrieve and answer | [rag/pipeline.py](rag/pipeline.py) | Embeds the question, fetches the 5 closest chunks, builds the prompt, and asks the LLM. |
 | LLM | [rag/llm.py](rag/llm.py) | Loads a Qwen3.5 model with Hugging Face Transformers and generates replies. By default it uses temperature 0, so the same input gives the same answer. |
