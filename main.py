@@ -1,9 +1,10 @@
 from pathlib import Path
 import streamlit as st
 
-from rag.pipeline import *
-from rag.embedder import *
-from rag.llm import *
+from rag.pipeline import prepare_document, ask
+from rag.embedder import load_embedder
+from rag.llm import load_llm
+from rag.summary import summarize_document
 
 
 PDF_DIR = Path(__file__).resolve().parent / "PDFs"
@@ -39,30 +40,45 @@ def initialize_session():
 
 # PDF handler
 def index_pdfs(files):
+    """Prepare each PDF. Returns (ready files, welcome summaries, errors)."""
     PDF_DIR.mkdir(exist_ok=True)
 
-    embedder, _ = load_models(st.session_state.model_id)
+    embedder, llm = load_models(st.session_state.model_id)
     indexed_files = []
+    summaries = []
+    errors = []
 
     for file in files:
         file_path = PDF_DIR / Path(file.name).name
         file_path.write_bytes(file.getvalue())
 
-        collection = prepare_document(str(file_path), embedder)
+        # load_pdf raises ValueError for non-PDFs and scanned PDFs
+        try:
+            collection = prepare_document(str(file_path), embedder)
+        except ValueError as e:
+            errors.append(f"**Could not read {file.name}:** {e}")
+            file_path.unlink(missing_ok=True)
+            continue
 
         st.session_state.pdfs[file.name] = file.getvalue()
         st.session_state.collections[file.name] = collection
-
         indexed_files.append(file.name)
 
-    return indexed_files
+        # Welcome summary of the whole document
+        with st.spinner(f"Summarizing {file.name}..."):
+            summary = summarize_document(str(file_path), llm)
+        summaries.append(f"**Summary of {file.name}**\n\n{summary}")
+
+    return indexed_files, summaries, errors
 
 
 # Chat handling
 def get_answer(question):
+    """Return the answer text and the source chunks to show."""
     embedder, llm = load_models(st.session_state.model_id)
 
     answers = []
+    sources = []
     multiple_pdfs = len(st.session_state.collections) > 1
 
     for name, collection in st.session_state.collections.items():
@@ -76,18 +92,23 @@ def get_answer(question):
         # One citation: the PDF and page the answer came from
         if citation:
             answers.append(f"_Source: {citation}_")
+            sources.append(source)
 
-    return "\n\n".join(answers)
+    return "\n\n".join(answers), sources
 
 
 def process_message(prompt):
     parts = []
+    sources = []
 
     if prompt.files:
         with st.spinner("Reading your PDFs..."):
-            files = index_pdfs(prompt.files)
+            files, summaries, errors = index_pdfs(prompt.files)
 
-        parts.append(f"Added {len(files)} PDF(s): {', '.join(files)}")
+        if files:
+            parts.append(f"Added {len(files)} PDF(s): {', '.join(files)}")
+        parts.extend(summaries)
+        parts.extend(errors)
 
     question = (prompt.text or "").strip()
 
@@ -96,9 +117,10 @@ def process_message(prompt):
             parts.append("Please attach a PDF before asking a question.")
         else:
             with st.spinner("Thinking..."):
-                parts.append(get_answer(question))
+                answer, sources = get_answer(question)
+                parts.append(answer)
 
-    return "\n\n---\n\n".join(parts)
+    return "\n\n---\n\n".join(parts), sources
 
 
 # Display
@@ -113,6 +135,11 @@ def display_message(message):
 
         if message.get("content"):
             st.markdown(message["content"])
+
+        # Text of the chunk each answer came from, hidden until clicked
+        for source in message.get("sources", []):
+            with st.expander(f"Source text: {source['source']}, page {source['page']}"):
+                st.text(source["text"])
 
 # Main application
 def main():
@@ -148,11 +175,12 @@ def main():
         st.session_state.messages.append(user_message)
         display_message(user_message)
 
-        response = process_message(prompt)
+        response, sources = process_message(prompt)
 
         assistant_message = {
             "role": "assistant",
-            "content": response
+            "content": response,
+            "sources": sources
         }
 
         st.session_state.messages.append(assistant_message)

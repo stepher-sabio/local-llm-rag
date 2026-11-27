@@ -1,5 +1,18 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+# Why these values:
+# - Recursive splitter: it cuts at blank lines first, then line breaks,
+#   then spaces, so paragraphs and list items stay whole when possible.
+#   Datasheets are mostly short paragraphs, lists and tables.
+# - 800 characters (~200 tokens): small enough that each chunk is about
+#   one topic (precise search), large enough to keep a full paragraph.
+#   It also stays under the input limit of small embedding models
+#   (all-MiniLM reads at most 256 tokens).
+# - 150 characters overlap (~20%): a sentence cut at a chunk border
+#   still appears whole in one of the two chunks.
+# - Each page is split on its own, so every chunk has exactly one page
+#   number for the citation.
+# Experiment 2 compares this setup with others (see eval/).
 CHUNK_SIZE = 800     # max characters per chunk
 CHUNK_OVERLAP = 150  # characters repeated between chunks
 
@@ -17,11 +30,11 @@ def chunk_pages(pages, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
 
     return chunks
 
-# test the chunker
-if __name__ == "__main__":
-    from pdf_loader import load_pdf
 
-    pages = load_pdf("data/ESP32 Datasheet.pdf")
+if __name__ == "__main__":
+    from rag.pdf_loader import load_pdf
+
+    pages = load_pdf("data/ESP32_Datasheet.pdf")
     chunks = chunk_pages(pages)
     print(len(pages), "pages ->", len(chunks), "chunks")
     print(chunks[0])
