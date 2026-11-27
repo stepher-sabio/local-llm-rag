@@ -6,8 +6,18 @@ from rag.chunker import chunk_pages
 from rag.embedder import load_embedder, embed
 from rag.vectordb import create_collection, add_chunks, search
 from rag.llm import load_llm, generate_reply
+from rag.retrieval import retrieve, reset_keyword_index
 
-TOP_K = 5  # number of chunks given to the LLM
+TOP_K = 5        # number of chunks given to the LLM
+MAX_HISTORY = 5  # previous messages the LLM remembers (conversation memory)
+
+# Default settings (the app changes them from the sidebar)
+DEFAULT_SETTINGS = {
+    "temperature": 0,        # 0 = always the same answer
+    "language": "English",   # answer language
+    "style": "Concise",      # Concise, Detailed or Bullet points
+    "hybrid": True,          # vector + keyword search
+}
 
 SYSTEM_PROMPT = (
     "You answer questions about a technical document. "
@@ -37,17 +47,27 @@ def prepare_document(path, embedder):
 
     collection = create_collection(collection_name(path))
     add_chunks(collection, chunks, vectors)
+    reset_keyword_index(collection.name)
     return collection
 
 
-def build_prompt(question, chunks):
-    """Put the chunks and the question into chat messages."""
+def build_prompt(question, chunks, history, settings):
+    """Put rules, memory, chunks and the question into chat messages."""
+    rules = (
+        SYSTEM_PROMPT
+        + f" Write the answer in {settings['language']}."
+        + f" Answer style: {settings['style']}."
+        + " If you don't know, still use the exact English sentence above."
+    )
     excerpts = "\n\n".join(f"[Page {c['page']}]\n{c['text']}" for c in chunks)
     user_text = f"Excerpts:\n{excerpts}\n\nQuestion: {question}"
-    return [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_text},
-    ]
+
+    # Memory: the last MAX_HISTORY messages go between the rules and the question
+    return (
+        [{"role": "system", "content": rules}]
+        + history[-MAX_HISTORY:]
+        + [{"role": "user", "content": user_text}]
+    )
 
 
 def find_source(answer, chunks, embedder):
@@ -70,12 +90,27 @@ def split_evidence(reply):
     return answer, evidence
 
 
-def ask(question, collection, embedder, llm, k=TOP_K):
-    """Answer a question and cite the one chunk it came from."""
-    q_vector = embed(embedder, [question])[0]
-    chunks = search(collection, q_vector, k)
+def ask(question, collection, embedder, llm, history=None, settings=None,
+        reranker=None, k=TOP_K):
+    """Answer a question and cite the one chunk it came from.
 
-    reply = generate_reply(llm, build_prompt(question, chunks))
+    history:  previous messages [{"role": ..., "content": ...}] (memory)
+    settings: temperature, language, style, hybrid (see DEFAULT_SETTINGS)
+    reranker: cross-encoder from load_reranker(), or None to skip re-ranking
+    """
+    history = history or []
+    settings = {**DEFAULT_SETTINGS, **(settings or {})}
+
+    # Follow-ups like "And for Timer1?" need the previous question to search well
+    previous = [m["content"] for m in history if m["role"] == "user"]
+    search_text = (previous[-1] + " " + question) if previous else question
+
+    q_vector = embed(embedder, [search_text])[0]
+    chunks = retrieve(collection, search_text, q_vector, k,
+                      use_hybrid=settings["hybrid"], reranker=reranker)
+
+    messages = build_prompt(question, chunks, history, settings)
+    reply = generate_reply(llm, messages, temperature=settings["temperature"])
 
     # No answer -> no citation
     if "don't know" in reply.lower():
@@ -98,10 +133,13 @@ if __name__ == "__main__":
     collection = prepare_document("data/ESP32 Datasheet.pdf", embedder)
     print(collection.count(), "chunks ready\n")
 
+    history = []
     while True:
         question = input("Question: ").strip()
         if question.lower() == "exit":
             break
-        answer, citation, source = ask(question, collection, embedder, llm)
+        answer, citation, source = ask(question, collection, embedder, llm, history)
         print("\nAnswer:", answer)
         print("Source:", citation, "\n")
+        history += [{"role": "user", "content": question},
+                    {"role": "assistant", "content": answer}]
