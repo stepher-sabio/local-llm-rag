@@ -1,10 +1,12 @@
 from pathlib import Path
 import streamlit as st
+import os 
 
 from rag.pipeline import prepare_document, ask
 from rag.embedder import load_embedder
 from rag.llm import load_llm
 from rag.summary import summarize_document
+from rag.retrieval import load_reranker
 
 
 PDF_DIR = Path(__file__).resolve().parent / "PDFs"
@@ -13,6 +15,7 @@ MODELS = {
     "Qwen3.5 0.8B (fast)": "Qwen/Qwen3.5-0.8B",
     "Qwen3.5 2B": "Qwen/Qwen3.5-2B",
     "Qwen3.5 4B": "Qwen/Qwen3.5-4B",
+    "Gemma 4 E2B": "google/gemma-4-E2B-it",
 }
 
 
@@ -26,6 +29,11 @@ def load_models(model_id):
     return embedder, llm
 
 
+@st.cache_resource
+def get_reranker():
+    return load_reranker()
+
+
 # State of the session
 def initialize_session():
     if "messages" not in st.session_state:
@@ -36,6 +44,10 @@ def initialize_session():
 
     if "collections" not in st.session_state:
         st.session_state.collections = {}
+
+    # Conversation memory: plain questions and answers for the LLM
+    if "history" not in st.session_state:
+        st.session_state.history = []
 
 
 # PDF handler
@@ -81,8 +93,16 @@ def get_answer(question):
     sources = []
     multiple_pdfs = len(st.session_state.collections) > 1
 
+    settings = st.session_state.settings
+    reranker = get_reranker() if settings["rerank"] else None
+
     for name, collection in st.session_state.collections.items():
-        answer, citation, source = ask(question, collection, embedder, llm)
+        answer, citation, source = ask(
+            question, collection, embedder, llm,
+            history=st.session_state.history,
+            settings=settings,
+            reranker=reranker,
+        )
 
         if multiple_pdfs:
             answers.append(f"**{name}**\n\n{answer}")
@@ -94,6 +114,12 @@ def get_answer(question):
             answers.append(f"_Source: {citation}_")
             sources.append(source)
 
+    # Remember this exchange (without the source lines)
+    st.session_state.history += [
+        {"role": "user", "content": question},
+        {"role": "assistant", "content": answer},
+    ]
+
     return "\n\n".join(answers), sources
 
 
@@ -104,6 +130,15 @@ def process_message(prompt):
     if prompt.files:
         with st.spinner("Reading your PDFs..."):
             files, summaries, errors = index_pdfs(prompt.files)
+
+            # The PDFs are already in the database, so delete the saved copies
+            for file in prompt.files:
+                path = PDF_DIR / Path(file.name).name
+                try:
+                    os.remove(path)
+                    print(f"File '{path}' deleted successfully.")
+                except Exception as e:
+                    print(f"File '{path}' wasn't deleted: {e}")
 
         if files:
             parts.append(f"Added {len(files)} PDF(s): {', '.join(files)}")
@@ -152,6 +187,21 @@ def main():
 
     label = st.sidebar.selectbox("Model", list(MODELS))
     st.session_state.model_id = MODELS[label]
+
+    # Settings (optional feature)
+    st.sidebar.header("Settings")
+    st.session_state.settings = {
+        "temperature": st.sidebar.slider("Temperature", 0.0, 1.0, 0.0, 0.1),
+        "language": st.sidebar.selectbox("Answer language",
+                                         ["English", "Spanish", "Catalan"]),
+        "style": st.sidebar.selectbox("Answer style",
+                                      ["Concise", "Detailed", "Bullet points"]),
+        "hybrid": st.sidebar.checkbox("Hybrid search (vector + keyword)", True),
+        "rerank": st.sidebar.checkbox("Re-ranking", True),
+    }
+
+    if st.sidebar.button("Clear conversation memory"):
+        st.session_state.history = []
 
     st.title("Chat with your PDFs")
 

@@ -9,11 +9,11 @@ The project uses **RAG** (Retrieval-Augmented Generation). It splits a PDF into 
 ## Features
 
 - **Streamlit chat UI**: attach one or more PDFs and ask questions in the same chat.
-- **Fully local**: Local language model and a BGE embedding model run on your machine.
+- **Fully local**: Local language model and a all-MiniLM embedding model run on your machine.
 - **Answers grounded in the document**: the model is told to use only the retrieved excerpts. If the answer isn't there, it replies *"I don't know based on this document."*
 - **Page citations**: every answer lists the pages its excerpts came from.
 - **Multiple PDFs**: each PDF gets its own answer, labeled with the file name.
-- **Model selector**: switch between Qwen3.5 0.8B, 2B, and 4B in the sidebar (if models are not installed on your machine they will be installed automatically).
+- **Model selector**: switch between Qwen3.5 0.8B, 2B, 4B and Google's Gemma 4 E2B in the sidebar (if models are not installed on your machine they will be installed automatically). All models are open and not gated, so no Hugging Face account or token is needed.
 - **Automatic hardware detection**: uses an NVIDIA GPU (CUDA), Apple Silicon (MPS), or the CPU, whichever is available.
 
 ---
@@ -26,17 +26,17 @@ PDF ──► pdf_loader ──► chunker ──► embedder ──► vectordb
 Question ──► embedder ──► search top-5 chunks ◄───────┘
                                 │
                                 ▼
-                     prompt + excerpts ──► LLM (Qwen) ──► answer + page numbers
+                     prompt + excerpts ──► LLM (Qwen / Gemma) ──► answer + page numbers
 ```
 
 | Step | File | What it does |
 |------|------|--------------|
 | 1. Load | [rag/pdf_loader.py](rag/pdf_loader.py) | Reads the text of each page with PyMuPDF and skips empty pages. Rejects files that aren't PDFs and scanned PDFs that have no text. |
 | 2. Chunk | [rag/chunker.py](rag/chunker.py) | Splits each page into chunks of up to 800 characters, with 150 characters of overlap, using LangChain's `RecursiveCharacterTextSplitter`. Every chunk keeps its page number. |
-| 3. Embed | [rag/embedder.py](rag/embedder.py) | Turns each chunk into a vector with [`BAAI/bge-small-en-v1.5`](https://huggingface.co/BAAI/bge-small-en-v1.5). |
+| 3. Embed | [rag/embedder.py](rag/embedder.py) | Turns each chunk into a vector with [`sentence-transformers/all-MiniLM-L12-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L12-v2). |
 | 4. Store | [rag/vectordb.py](rag/vectordb.py) | Saves the chunks and their vectors in a persistent [Chroma](https://www.trychroma.com/) database (`chroma_db/`) using cosine distance. Each PDF gets its own collection. |
 | 5. Retrieve and answer | [rag/pipeline.py](rag/pipeline.py) | Embeds the question, fetches the 5 closest chunks, builds the prompt, and asks the LLM. |
-| LLM | [rag/llm.py](rag/llm.py) | Loads a Qwen3.5 model with Hugging Face Transformers and generates replies. By default it uses temperature 0, so the same input gives the same answer. |
+| LLM | [rag/llm.py](rag/llm.py) | Loads the selected model (Qwen3.5 or Gemma 4) with Hugging Face Transformers and generates replies. By default it uses temperature 0, so the same input gives the same answer. |
 | UI | [main.py](main.py) | The Streamlit chat app. |
 | CLI chat | [run.py](run.py) | A plain terminal chat with the LLM, with no PDFs and no RAG. |
 
@@ -45,7 +45,7 @@ Question ──► embedder ──► search top-5 chunks ◄──────�
 ## Requirements
 
 - **Python 3.10 or newer** (developed with Python 3.13)
-- About **2–10 GB of free disk space** for the models, depending on which Qwen model you use
+- About **2–10 GB of free disk space per model**, depending on which model you use (Gemma 4 E2B is the largest download, about 10 GB)
 - **Optional:** an NVIDIA GPU with CUDA, or an Apple Silicon Mac, for much faster answers. The CPU works, but larger models will be slow.
 - An internet connection **the first time you run it**, to download the models from Hugging Face
 
@@ -115,7 +115,8 @@ local-llm-rag/
 └── models/
     ├── Qwen3.5-0.8B/
     ├── Qwen3.5-2B/
-    └── Qwen3.5-4B/
+    ├── Qwen3.5-4B/
+    └── gemma-4-E2B-it/
 ```
 
 `rag/llm.py` checks `models/<model name>` first and falls back to downloading from Hugging Face.
@@ -134,7 +135,7 @@ streamlit run main.py
 
 Streamlit opens the app in your browser, usually at <http://localhost:8501>.
 
-1. **Pick a model** in the sidebar. *Qwen3.5 0.8B (fast)* is the default and the best choice for a CPU.
+1. **Pick a model** in the sidebar. *Qwen3.5 0.8B (fast)* is the default and the best choice for a CPU. *Gemma 4 E2B* is a non-Qwen alternative from Google; it is slower and needs more memory, so a GPU is recommended.
 2. **Attach PDFs** with the paperclip in the chat box. You can add several at once.
 3. **Ask a question** in the same message or in a later one.
 4. Read the answer and the **page numbers** listed under it.
@@ -160,7 +161,7 @@ Type `exit` to quit.
 
 | Setting | Where | Default |
 |---------|-------|---------|
-| Models in the UI dropdown | `MODELS` in [main.py](main.py) | Qwen3.5 0.8B / 2B / 4B |
+| Models in the UI dropdown | `MODELS` in [main.py](main.py) | Qwen3.5 0.8B / 2B / 4B, Gemma 4 E2B |
 | Default LLM (CLI and tests) | `HUB_MODEL_ID` in [rag/llm.py](rag/llm.py) | `Qwen/Qwen3.5-0.8B` |
 | Embedding model | `MODEL_NAME` in [rag/embedder.py](rag/embedder.py) | `BAAI/bge-small-en-v1.5` |
 | Chunk size / overlap | `CHUNK_SIZE`, `CHUNK_OVERLAP` in [rag/chunker.py](rag/chunker.py) | 800 / 150 characters |
@@ -170,6 +171,16 @@ Type `exit` to quit.
 | Database folder | `DB_PATH` in [rag/vectordb.py](rag/vectordb.py) | `chroma_db/` |
 
 If you change the embedding model, upload your PDFs again so their vectors are rebuilt.
+
+### Adding another LLM
+
+Add a line to `MODELS` in [main.py](main.py), for example:
+
+```python
+"Gemma 4 E4B": "google/gemma-4-E4B-it",
+```
+
+The model must be supported by `AutoModelForMultimodalLM` in `transformers` (for example Qwen3.5, Gemma 4, SmolVLM). Text-only models will not load without changing [rag/llm.py](rag/llm.py). Prefer models that are **not gated** on Hugging Face, so others can run the project without a login.
 
 ---
 
@@ -184,7 +195,7 @@ local-llm-rag/
 │   ├── chunker.py       # pages → overlapping chunks
 │   ├── embedder.py      # chunks → vectors (BGE)
 │   ├── vectordb.py      # Chroma storage and search
-│   ├── llm.py           # Qwen loading and generation
+│   ├── llm.py           # LLM (Qwen / Gemma) loading and generation
 │   └── pipeline.py      # ties everything together (prepare_document, ask)
 ├── PDFs/                # uploaded PDFs (git-ignored)
 ├── chroma_db/           # vector database (git-ignored, created automatically)
@@ -203,6 +214,7 @@ local-llm-rag/
 | Answers are very slow | Use the 0.8B model, or install the CUDA build of PyTorch if you have an NVIDIA GPU. |
 | Out of memory | Pick a smaller model in the sidebar. |
 | `AttributeError` mentioning `chat_input`, `badge`, or `AutoModelForMultimodalLM` | Upgrade the packages: `pip install -U streamlit transformers`. |
+| `GatedRepoError` / `401 Unauthorized` when loading a model | The model needs a Hugging Face login. Use the models listed in the sidebar; they are all public. If you added your own model to `MODELS`, pick one that is not gated. |
 | `ModuleNotFoundError: rag` | Run commands from the project root, not from inside `rag/`. |
 
 ---
