@@ -204,6 +204,18 @@ def main():
         st.session_state.history = []
 
     st.title("Chat with your PDFs")
+    
+    # Welcome message while the chat is empty
+    if not st.session_state.messages:
+        with st.chat_message("assistant"):
+            st.markdown(
+                "👋 **Hi! I'm your datasheet assistant.**\n\n"
+                "Attach a PDF (a datasheet, manual or project statement) "
+                "and I'll summarise it. Then ask me anything about it: "
+                "I'll answer using only the document and cite the page "
+                "the answer comes from. If the answer isn't in the "
+                "document, I'll tell you."
+            )
 
     for message in st.session_state.messages:
         display_message(message)
