@@ -6,13 +6,14 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 #   Datasheets are mostly short paragraphs, lists and tables.
 # - 800 characters (~200 tokens): small enough that each chunk is about
 #   one topic (precise search), large enough to keep a full paragraph.
-#   It also stays under the input limit of small embedding models
-#   (all-MiniLM reads at most 256 tokens).
+#   It also fits the input limit of small embedding models
+#   (bge-small reads up to 512 tokens, all-MiniLM up to 256).
 # - 150 characters overlap (~20%): a sentence cut at a chunk border
 #   still appears whole in one of the two chunks.
 # - Each page is split on its own, so every chunk has exactly one page
 #   number for the citation.
-# Experiment 2 compares this setup with others (see eval/).
+# Experiment 2 (see evaluation.md): 800/150 found 6 of 8 answers in the
+# top 5, while 400/80 found only 5 of 8, so we kept 800/150.
 CHUNK_SIZE = 800     # max characters per chunk
 CHUNK_OVERLAP = 150  # characters repeated between chunks
 

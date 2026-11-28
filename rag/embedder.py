@@ -1,6 +1,6 @@
 from sentence_transformers import SentenceTransformer
 
-MODEL_NAME = "sentence-transformers/all-MiniLM-L12-v2" # change this if you want to use a different model
+MODEL_NAME = "BAAI/bge-base-en-v1.5" # change this if you want to use a different model
 
 
 def load_embedder(model_name=MODEL_NAME):
